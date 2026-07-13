@@ -5,6 +5,7 @@ on:
   schedule:
     # 30分ごと。毎時00分はGitHub Actionsが混雑しやすいため3分ずらす。
     - cron: "3,33 * * * *"
+      timezone: "Asia/Tokyo"
 
 jobs:
   run-secretary:
