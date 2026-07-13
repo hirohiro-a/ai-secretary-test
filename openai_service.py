@@ -28,6 +28,7 @@ ANALYSIS_RESPONSE_FORMAT = {
                                 "type": "string",
                                 "enum": ["reminder", "question", "clarification", "memo"],
                             },
+                            "source_text": {"type": "string"},
                             "reply": {"type": "string"},
                             "task": {
                                 "anyOf": [
@@ -71,7 +72,7 @@ ANALYSIS_RESPONSE_FORMAT = {
                                 ]
                             },
                         },
-                        "required": ["kind", "reply", "task"],
+                        "required": ["kind", "source_text", "reply", "task"],
                         "additionalProperties": False,
                     },
                 }
@@ -114,6 +115,7 @@ def parse_with_gpt(memo_text):
 
 - メモ内に複数の用件があれば、items内で1件ずつ分ける。
 - 各itemのkindは reminder、question、clarification、memo のいずれか。
+- source_textには、そのitemの判定対象にした元メモの文章だけを原文のまま入れる。他の用件やメモ全文を混ぜず、要約・言い換えをしない。
 - reminder: 日時のある通知依頼。replyは空文字、taskに従来のタスク情報を入れる。
 - question: 一般知識で回答できる普通の質問。taskはnull、replyに日本語で簡潔に回答する。
 - clarification: 実行や回答に必要な情報が不足している依頼。taskはnull、replyで不足情報を質問する。通知依頼で日時が不足している場合もこれに含む。

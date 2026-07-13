@@ -133,44 +133,63 @@ def _reply_already_written(source_hash):
 
 
 def append_ai_reply(memo_text, replies, source_hash):
-    if not replies:
-        return False
     if not NOTION_REPLY_PAGE_ID:
-        raise RuntimeError("GitHub Secret NOTION_REPLY_PAGE_ID が未設定です。")
+        if replies:
+            raise RuntimeError("GitHub Secret NOTION_REPLY_PAGE_ID が未設定です。")
+        return False
     if _reply_already_written(source_hash):
-        print("同じメモのAI返答はすでに保存済みです。重複追記をスキップします。")
+        print("同じメモのAI返答はすでに表示済みです。重複更新をスキップします。")
         return False
 
-    processed_at = datetime.now(JST).isoformat(timespec="seconds")
-    classifications = ", ".join(reply["kind"] for reply in replies)
+    processed_at = datetime.now(JST).strftime("%Y-%m-%d %H:%M")
+    notion.pages.update(page_id=NOTION_REPLY_PAGE_ID, erase_content=True)
+
     children = [
-        {"object": "block", "type": "divider", "divider": {}},
         {
             "object": "block",
-            "type": "heading_2",
-            "heading_2": {"rich_text": _rich_text(f"AI秘書からの返答 {processed_at}")},
+            "type": "heading_1",
+            "heading_1": {"rich_text": _rich_text("AI秘書からの返答")},
         },
         {
             "object": "block",
             "type": "paragraph",
-            "paragraph": {"rich_text": _rich_text(f"分類: {classifications}")},
+            "paragraph": {"rich_text": _rich_text(f"日時: {processed_at}")},
         },
-        {
-            "object": "block",
-            "type": "heading_3",
-            "heading_3": {"rich_text": _rich_text("元のAI秘書メモ")},
-        },
+        {"object": "block", "type": "divider", "divider": {}},
     ]
-    children.extend(_paragraph_blocks(memo_text))
-    children.append(
-        {
-            "object": "block",
-            "type": "heading_3",
-            "heading_3": {"rich_text": _rich_text("GPTからの返答")},
-        }
-    )
-    for reply in replies:
-        children.extend(_paragraph_blocks(f"[{reply['kind']}] {reply['reply']}"))
+
+    if replies:
+        for index, reply in enumerate(replies, start=1):
+            children.extend(
+                [
+                    {
+                        "object": "block",
+                        "type": "heading_2",
+                        "heading_2": {"rich_text": _rich_text(f"■質問{index}")},
+                    },
+                    {
+                        "object": "block",
+                        "type": "heading_3",
+                        "heading_3": {"rich_text": _rich_text("元のAI秘書メモ")},
+                    },
+                ]
+            )
+            children.extend(_paragraph_blocks(reply["source_text"]))
+            children.append(
+                {
+                    "object": "block",
+                    "type": "heading_3",
+                    "heading_3": {"rich_text": _rich_text("GPTからの返答")},
+                }
+            )
+            children.extend(_paragraph_blocks(reply["reply"]))
+            if index < len(replies):
+                children.append(
+                    {"object": "block", "type": "divider", "divider": {}}
+                )
+    else:
+        children.extend(_paragraph_blocks("今回のメモには返答対象の質問はありません。"))
+
     children.append(
         {
             "object": "block",

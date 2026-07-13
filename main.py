@@ -56,6 +56,7 @@ def update_tasks_if_memo_changed():
 
         item_kind = item.get("kind")
         task = item.get("task")
+        source_text = item.get("source_text", "").strip()
         reply = item.get("reply", "").strip()
 
         if item_kind in {"reminder", "memo"}:
@@ -68,9 +69,13 @@ def update_tasks_if_memo_changed():
                 )
             tasks.append(task)
         elif item_kind in {"question", "clarification"}:
+            if not source_text:
+                raise ValueError(f"GPT解析結果の{index}件目にsource_textがありません。")
             if not reply:
                 raise ValueError(f"GPT解析結果の{index}件目にreplyがありません。")
-            replies.append({"kind": item_kind, "reply": reply})
+            replies.append(
+                {"kind": item_kind, "source_text": source_text, "reply": reply}
+            )
         else:
             raise ValueError(f"GPT解析結果の{index}件目の分類が不正です: {item_kind}")
 
@@ -85,14 +90,13 @@ def update_tasks_if_memo_changed():
         for task in tasks:
             create_task(task)
 
-    if replies:
-        append_ai_reply(memo_text, replies, current_hash)
+    append_ai_reply(memo_text, replies, current_hash)
 
     # DB更新と返答追記がすべて成功してから保存する。
     save_hash(current_hash)
 
     print(f"{len(tasks)} 件のタスクをAI秘書DBへ登録しました。")
-    print(f"{len(replies)} 件の返答をAI秘書からの返答ページへ追記しました。")
+    print(f"{len(replies)} 件の最新返答をAI秘書からの返答ページへ表示しました。")
     print("新しいメモハッシュを保存しました。")
 
     return database_updated
