@@ -3,8 +3,8 @@ name: AI Secretary Main
 on:
   workflow_dispatch:
   schedule:
-    # テスト用：毎時03分・18分・33分に実行
-    - cron: "3,18,33 * * * *"
+    # 30分ごと。毎時00分はGitHub Actionsが混雑しやすいため3分ずらす。
+    - cron: "3,33 * * * *"
 
 jobs:
   run-secretary:
