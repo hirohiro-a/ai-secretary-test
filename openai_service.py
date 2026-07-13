@@ -11,6 +11,77 @@ openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 JST = ZoneInfo("Asia/Tokyo")
 
+ANALYSIS_RESPONSE_FORMAT = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "ai_secretary_analysis",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "kind": {
+                                "type": "string",
+                                "enum": ["reminder", "question", "clarification", "memo"],
+                            },
+                            "reply": {"type": "string"},
+                            "task": {
+                                "anyOf": [
+                                    {"type": "null"},
+                                    {
+                                        "type": "object",
+                                        "properties": {
+                                            "title": {"type": "string"},
+                                            "content": {"type": "string"},
+                                            "kind": {
+                                                "type": "string",
+                                                "enum": ["リマインド", "調査", "価格監視", "メモ"],
+                                            },
+                                            "status": {
+                                                "type": "string",
+                                                "enum": ["未着手"],
+                                            },
+                                            "notify": {
+                                                "type": "string",
+                                                "enum": ["LINE", "Notion", "メール"],
+                                            },
+                                            "run_datetime": {
+                                                "anyOf": [
+                                                    {"type": "string"},
+                                                    {"type": "null"},
+                                                ]
+                                            },
+                                            "analysis": {"type": "string"},
+                                        },
+                                        "required": [
+                                            "title",
+                                            "content",
+                                            "kind",
+                                            "status",
+                                            "notify",
+                                            "run_datetime",
+                                            "analysis",
+                                        ],
+                                        "additionalProperties": False,
+                                    },
+                                ]
+                            },
+                        },
+                        "required": ["kind", "reply", "task"],
+                        "additionalProperties": False,
+                    },
+                }
+            },
+            "required": ["items"],
+            "additionalProperties": False,
+        },
+    },
+}
+
 
 def clean_json_text(text):
     text = text.strip()
@@ -34,22 +105,35 @@ def parse_with_gpt(memo_text):
 
     prompt = f"""
 あなたは、ひろさん専用のAI秘書です。
-以下のメモを読んで、Notionデータベースに登録するためのJSON配列だけを返してください。
+以下のメモを用件ごとに分類し、指定された構造のJSONだけを返してください。
 
 現在日時は {current_datetime} です。
 タイムゾーンは Asia/Tokyo です。
 
 ルール:
 
-- 出力はJSON配列のみ。説明文は禁止。
-- メモ内に複数の用件があれば、1件ずつ分けて配列にする。
+- メモ内に複数の用件があれば、items内で1件ずつ分ける。
+- 各itemのkindは reminder、question、clarification、memo のいずれか。
+- reminder: 日時のある通知依頼。replyは空文字、taskに従来のタスク情報を入れる。
+- question: 一般知識で回答できる普通の質問。taskはnull、replyに日本語で簡潔に回答する。
+- clarification: 実行や回答に必要な情報が不足している依頼。taskはnull、replyで不足情報を質問する。通知依頼で日時が不足している場合もこれに含む。
+- memo: 単なるメモや、従来どおりNotion DBへ残す調査・価格監視などの用件。replyは空文字、taskに情報を入れる。
+- questionとclarificationでは、replyを必ず空でない文章にする。
+- reminderとmemoでは、taskを必ず設定する。
+
+taskのルール:
 - title は短い件名。
 - content は内容を自然に要約。
-- kind は「リマインド」「調査」「価格監視」「メモ」のどれか。
-- status は基本「未着手」。
+- task.kind は「リマインド」「調査」「価格監視」「メモ」のどれか。
+- status は「未着手」。
 - notify は「LINE」「Notion」「メール」のどれか。指定がなければ「Notion」。
-- run_datetime は日時が分かる場合だけ ISO形式で返す。
+- run_datetime は日時が分かる場合だけISO形式、それ以外はnull。
 - analysis には、どう解釈したかを日本語で短く書く。
+
+外部情報の制限:
+- Web検索、天気API、ニュースAPI、価格APIは利用できない。
+- 天気などで場所や日付が不足している場合はclarificationにして不足情報を質問する。
+- 場所と日付があってもリアルタイム情報が必要な場合はquestionにし、現在は外部検索機能が未実装で確認できないとreplyで伝える。
 
 - 「1時間前に通知」と書かれている場合は予定時刻の1時間前にする。
 
@@ -86,13 +170,18 @@ def parse_with_gpt(memo_text):
         messages=[
             {
                 "role": "system",
-                "content": "あなたは自然文メモをタスク管理用JSON配列に変換する秘書です。",
+                "content": "あなたは自然文メモを分類し、タスクまたは日本語の返答へ変換する秘書です。",
             },
             {"role": "user", "content": prompt},
         ],
         temperature=0,
+        response_format=ANALYSIS_RESPONSE_FORMAT,
     )
 
-    cleaned = clean_json_text(response.choices[0].message.content)
+    message = response.choices[0].message
+    if getattr(message, "refusal", None):
+        raise RuntimeError(f"OpenAIが解析を拒否しました: {message.refusal}")
+
+    cleaned = clean_json_text(message.content)
 
     return json.loads(cleaned)

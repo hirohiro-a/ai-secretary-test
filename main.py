@@ -8,6 +8,7 @@ from notion_service import (
     save_hash,
     clear_database,
     create_task,
+    append_ai_reply,
     get_due_reminders,
     mark_done,
 )
@@ -31,39 +32,70 @@ def update_tasks_if_memo_changed():
 
     print("メモ変更あり。GPT解析を実行します。")
 
-    tasks = parse_with_gpt(memo_text)
+    result = parse_with_gpt(memo_text)
+    items = result.get("items") if isinstance(result, dict) else None
 
-    if isinstance(tasks, dict):
-        tasks = [tasks]
+    if not isinstance(items, list) or not items:
+        raise ValueError("GPTの解析結果にitems配列がありません。")
 
-    if not isinstance(tasks, list) or not tasks:
-        raise ValueError("GPTの解析結果が空、またはJSON配列ではありません。")
+    tasks = []
+    replies = []
+    required_task_keys = {
+        "title",
+        "content",
+        "kind",
+        "status",
+        "notify",
+        "run_datetime",
+        "analysis",
+    }
 
-    required_keys = {"title", "content", "kind", "status", "notify"}
-    for index, task in enumerate(tasks, start=1):
-        if not isinstance(task, dict):
+    for index, item in enumerate(items, start=1):
+        if not isinstance(item, dict):
             raise ValueError(f"GPT解析結果の{index}件目がJSONオブジェクトではありません。")
-        missing = required_keys - task.keys()
-        if missing:
-            raise ValueError(
-                f"GPT解析結果の{index}件目に必須項目がありません: {sorted(missing)}"
-            )
+
+        item_kind = item.get("kind")
+        task = item.get("task")
+        reply = item.get("reply", "").strip()
+
+        if item_kind in {"reminder", "memo"}:
+            if not isinstance(task, dict):
+                raise ValueError(f"GPT解析結果の{index}件目にtaskがありません。")
+            missing = required_task_keys - task.keys()
+            if missing:
+                raise ValueError(
+                    f"GPT解析結果の{index}件目のtaskに必須項目がありません: {sorted(missing)}"
+                )
+            tasks.append(task)
+        elif item_kind in {"question", "clarification"}:
+            if not reply:
+                raise ValueError(f"GPT解析結果の{index}件目にreplyがありません。")
+            replies.append({"kind": item_kind, "reply": reply})
+        else:
+            raise ValueError(f"GPT解析結果の{index}件目の分類が不正です: {item_kind}")
 
     print("=== GPT解析結果 ===")
-    print(json.dumps(tasks, ensure_ascii=False, indent=2))
+    print(json.dumps(result, ensure_ascii=False, indent=2))
 
-    # GPT解析に成功してから、古いDBデータを消す
-    clear_database()
+    database_updated = bool(tasks)
+    if database_updated:
+        # 質問だけの場合は、既存のリマインダーDBを変更しない。
+        clear_database()
 
-    for task in tasks:
-        create_task(task)
+        for task in tasks:
+            create_task(task)
 
+    if replies:
+        append_ai_reply(memo_text, replies, current_hash)
+
+    # DB更新と返答追記がすべて成功してから保存する。
     save_hash(current_hash)
 
     print(f"{len(tasks)} 件のタスクをAI秘書DBへ登録しました。")
+    print(f"{len(replies)} 件の返答をAI秘書からの返答ページへ追記しました。")
     print("新しいメモハッシュを保存しました。")
 
-    return True
+    return database_updated
 
 
 def notify_due_reminders():

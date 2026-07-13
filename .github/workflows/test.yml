@@ -31,6 +31,7 @@ jobs:
           NOTION_MEMO_PAGE_ID: ${{ secrets.NOTION_MEMO_PAGE_ID }}
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
           NOTION_SETTING_PAGE_ID: ${{ secrets.NOTION_SETTING_PAGE_ID }}
+          NOTION_REPLY_PAGE_ID: ${{ secrets.NOTION_REPLY_PAGE_ID }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
           LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
