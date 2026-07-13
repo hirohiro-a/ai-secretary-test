@@ -1,0 +1,43 @@
+name: AI Secretary Main
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 30分ごと。毎時00分はGitHub Actionsが混雑しやすいため3分ずらす。
+    - cron: "3,33 * * * *"
+
+jobs:
+  run-secretary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install libraries
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run AI Secretary
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_MEMO_PAGE_ID: ${{ secrets.NOTION_MEMO_PAGE_ID }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          NOTION_SETTING_PAGE_ID: ${{ secrets.NOTION_SETTING_PAGE_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+        run: |
+          echo "event=${{ github.event_name }}"
+          date -u
+          python main.py

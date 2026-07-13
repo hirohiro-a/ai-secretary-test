@@ -1,0 +1,14 @@
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+NOTION_TOKEN = os.getenv("NOTION_TOKEN")
+NOTION_MEMO_PAGE_ID = os.getenv("NOTION_MEMO_PAGE_ID")
+NOTION_DATABASE_ID = os.getenv("NOTION_DATABASE_ID")
+NOTION_SETTING_PAGE_ID = os.getenv("NOTION_SETTING_PAGE_ID")
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
+LINE_USER_ID = os.getenv("LINE_USER_ID")
